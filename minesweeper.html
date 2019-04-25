@@ -1,0 +1,305 @@
+<!doctype html>
+<html class="no-js" lang="">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Minesweeper</title>
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body,html{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      background-color:#fff;
+      position:relative;
+      height:100%;
+      width:100%;
+    }
+    #game{
+      position:fixed;
+      width:100vw;
+      height:100vh;
+      z-index:99999;
+      padding:0;
+      margin:0;
+      top:0;
+      left:0;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+/*
+  Minesweeper
+*/
+
+var GAME_SIZE = {
+  width: window.innerHeight,
+  height: window.innerWidth
+};
+
+const CELL_SIZE = 16;
+
+const CELL_STATES = {
+  empty: 0,
+  bomb: 1,
+  clicked: 2,
+  flag: 3
+}
+
+const COLORS = {
+  empty: "#eeeeee",
+  bomb: "#000000",
+  clicked: "#bcbcbc",
+  flag: "#ff0000",
+};
+
+function GameMaster(){
+  this.cells = {},
+  this.game = null,
+  this.context = null,
+  this.bombs = [],
+  this.playing = true,
+  this.init = function(){
+    this.game = document.getElementById("game");
+    this.context = this.game.getContext("2d");
+
+    // Fix for blurry canvas!
+    this.game.width = this.game.getBoundingClientRect().width;
+    this.game.height = this.game.getBoundingClientRect().height;
+
+    GAME_SIZE = {
+      width: this.game.width,
+      height: this.game.height
+    };
+
+    this.generateCells();
+
+    this.game.onclick = (e) => { this.onclick(e); };
+    this.game.oncontextmenu = (e) => { this.oncontextmenu(e); };
+
+    return this;
+  },
+  this.generateCells = function(){
+    for (let x = 0; x < GAME_SIZE.width; x += CELL_SIZE) {
+      this.cells[x] = {};
+      for (let y = 0; y < GAME_SIZE.height; y += CELL_SIZE) {
+        let isBomb = Math.random() < 0.5 ? true : false;
+        this.cells[x][y] = {
+          isBomb: isBomb,
+          state: 0,
+          position: {
+            x: x,
+            y: y
+          },
+          totalBombsNearby: 0
+        };
+
+        if (isBomb) {
+          this.bombs.push([x,y]);
+        }
+
+        this.context.fillStyle = COLORS.empty
+        this.context.lineWidth = 1;
+        this.context.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+        this.context.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+      }
+    }
+
+    // Calculate total bombs nearby
+    for(let x in this.cells) {
+      x = parseInt(x);
+      for(let y in this.cells[x]){
+        y = parseInt(y);
+        let neighbors = this.neighbors(x,y, true);
+        for (let k in neighbors) {
+          if (neighbors[k].isBomb) {
+            this.cells[x][y].totalBombsNearby++;
+          }
+        }
+      }
+    }
+
+    return this;
+  },
+  this.oncontextmenu = function(e){
+    e.preventDefault();
+
+    if (!this.playing) {
+      return false;
+    }
+
+    for(let x in this.cells) {
+      x = parseInt(x);
+      for(let y in this.cells[x]){
+        y = parseInt(y);
+        // Did the user click inside a cell?
+        if (e.pageY > y &&
+            e.pageY < y + CELL_SIZE &&
+            e.pageX > x &&
+            e.pageX < x + CELL_SIZE) {
+          // Right mouse button cleans the cell
+          if (this.cells[x][y].state == CELL_STATES.empty) {
+            this.cells[x][y].state = CELL_STATES.flag;
+            this.drawCell(x, y, this.cells[x][y].state);
+            this.checkForWin();
+          } else if (this.cells[x][y].state == CELL_STATES.flag) {
+            this.cells[x][y].state = CELL_STATES.empty;
+            this.drawCell(x, y, this.cells[x][y].state);
+          }
+          break;
+        }
+      }
+    }
+
+    // No context menu
+    return false;
+  },
+  this.checkForWin = function(){
+    var total = 0;
+    for (let k in this.bombs) {
+      let x = this.bombs[k][0];
+      let y = this.bombs[k][1];
+      if (this.cells[x][y].isBomb && this.cells[x][y].state == CELL_STATES.flag) {
+        total++;
+      }
+      //this.cells[x][y].state = CELL_STATES.bomb;
+      //this.drawCell(x, y, this.cells[x][y].state);
+    }
+
+    if (total == this.bombs.length) {
+      this.playing = false;
+      alert("You win!");
+    }
+  },
+  this.drawCell = function(x, y, state){
+    this.context.clearRect(x, y, CELL_SIZE, CELL_SIZE);
+
+    switch(state){
+      case 0:
+        this.context.fillStyle = COLORS.empty;
+        break;
+      case 1:
+        this.context.fillStyle = COLORS.bomb;
+        break;
+      case 2:
+        this.context.fillStyle = COLORS.clicked;
+        break;
+      case 3:
+        this.context.fillStyle = COLORS.flag;
+        break;
+    }
+
+    //this.context.lineWidth = 1;
+    this.context.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+    this.context.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+
+    return this;
+  },
+  this.onclick = function(e){
+    if (!this.playing) {
+      return false;
+    }
+
+    for(let x in this.cells) {
+      x = parseInt(x);
+      for(let y in this.cells[x]){
+        y = parseInt(y);
+        // Did the user click inside a cell?
+        if (e.pageY > y &&
+            e.pageY < y + CELL_SIZE &&
+            e.pageX > x &&
+            e.pageX < x + CELL_SIZE) {
+          if (e.button == 0) {
+            // Left mouse button creates a conductor or an electron head
+            if (this.cells[x][y].state == CELL_STATES.empty) {
+              this.showCells(x,y, this.cells[x][y].totalBombsNearby == 0 ? true : false);
+            }
+          }
+          break;
+        }
+      }
+    }
+    return this;
+  },
+  this.showCells = function(x,y, showNeighbors){
+
+    if (this.cells[x][y].state == CELL_STATES.clicked) {
+      return this;
+    }
+
+    if (this.cells[x][y].isBomb) {
+      // Show all bombs if a bomb is clicked
+      for (let k in this.bombs) {
+        let bx = this.bombs[k][0];
+        let by = this.bombs[k][1];
+        this.cells[bx][by].state = CELL_STATES.bomb;
+        this.drawCell(bx, by, this.cells[bx][by].state);
+      }
+      this.playing = false;
+      return this;
+    }
+
+    if (!showNeighbors && this.cells[x][y].totalBombsNearby == 0 && !this.cells[x][y].isBomb) {
+      showNeighbors = true;
+    }
+
+    if (showNeighbors && this.cells[x][y].totalBombsNearby == 0) {
+      var neighbors = this.neighbors(x, y, false);
+      for (let k in neighbors) {
+        if (showNeighbors && !neighbors[k].isBomb) {
+          setTimeout(() => { this.showCells(neighbors[k].position.x, neighbors[k].position.y, this.cells[x][y].totalBombsNearby == 0 ? true : false); }, Math.floor(Math.random() * 50));
+        }
+      }
+    }
+
+    if (this.cells[x][y].state == CELL_STATES.empty) {
+      this.cells[x][y].state = CELL_STATES.clicked;
+      this.drawCell(x, y, this.cells[x][y].state);
+    }
+
+    if (this.cells[x][y].totalBombsNearby > 0) {
+      this.context.fillStyle = "#000099";
+      this.context.font = CELL_SIZE + "px Impact";
+      this.context.fillText(this.cells[x][y].totalBombsNearby, x + (CELL_SIZE/3), y + CELL_SIZE);
+    }
+
+    return this;
+  },
+  this.neighbors = function(x, y, getAllNeighbors){
+    var neighbors = [];
+    if (this.cells[x - CELL_SIZE] && this.cells[x - CELL_SIZE][y]) {
+      neighbors.push(this.cells[x - CELL_SIZE][y]);
+    }
+    if (this.cells[x][y - CELL_SIZE]) {
+      neighbors.push(this.cells[x][y - CELL_SIZE]);
+    }
+    if (this.cells[x][y + CELL_SIZE]) {
+      neighbors.push(this.cells[x][y + CELL_SIZE]);
+    }
+    if (this.cells[x + CELL_SIZE] && this.cells[x + CELL_SIZE][y]) {
+      neighbors.push(this.cells[x + CELL_SIZE][y]);
+    }
+    if (getAllNeighbors) {
+      if (this.cells[x - CELL_SIZE] && this.cells[x - CELL_SIZE][y - CELL_SIZE]) {
+        neighbors.push(this.cells[x - CELL_SIZE][y - CELL_SIZE]);
+      }
+      if (this.cells[x - CELL_SIZE] && this.cells[x - CELL_SIZE][y + CELL_SIZE]) {
+        neighbors.push(this.cells[x - CELL_SIZE][y + CELL_SIZE]);
+      }
+      if (this.cells[x + CELL_SIZE] && this.cells[x + CELL_SIZE][y - CELL_SIZE]) {
+        neighbors.push(this.cells[x + CELL_SIZE][y - CELL_SIZE]);
+      }
+      if (this.cells[x + CELL_SIZE] && this.cells[x + CELL_SIZE][y + CELL_SIZE]) {
+        neighbors.push(this.cells[x + CELL_SIZE][y + CELL_SIZE]);
+      }
+    }
+    return neighbors;
+  };
+}
+
+var gameMaster = new GameMaster().init();
+</script>
+
+</body>
+</html>
